@@ -116,6 +116,23 @@ return { data: 'value' };
 
 ## Advanced Usage
 
+## Middleware type helper definition
+
+You can define a middleware type helper to make it easier to create middleware functions. This is useful for defining reusable middleware that can be applied to multiple routes. You can define this type helper in a separate file, such as `/src/types/middleware.d.ts`:
+
+```ts
+type MiddlewareFunction<
+  TContext = Record<string, unknown>,
+  TNextContext = Record<string, unknown>,
+  TMetadata = unknown,
+> = (opts: {
+  request: Request;
+  ctx: TContext;
+  metadata?: TMetadata;
+  next: NextFunction<TContext>;
+}) => Promise<MiddlewareResult<TNextContext>>;
+```
+
 ## Create client
 
 You can create a reusable client in a file, I recommend `/src/lib/route.ts` with the following content:
@@ -148,7 +165,7 @@ const permissionsMetadataSchema = z.object({
 });
 
 // Create a middleware that checks permissions
-const permissionCheckMiddleware = async ({ next, metadata, request }) => {
+const permissionCheckMiddleware: MiddlewareFunction = async ({ next, metadata, request }) => {
   // Get user permissions from auth header, token, or session
   const userPermissions = getUserPermissions(request);
 
@@ -219,10 +236,11 @@ This pattern allows you to:
 You can add middleware to your route handler with the `use` method. Middleware functions can add data to the context that will be available in your handler.
 
 ```ts
-const loggingMiddleware = async ({ next }) => {
+const loggingMiddleware: MiddlewareFunction = async ({ next }) => {
   console.log('Before handler');
   const startTime = performance.now();
 
+  // next() returns a Promise<Response>
   const response = await next();
 
   const endTime = performance.now() - startTime;
@@ -231,7 +249,7 @@ const loggingMiddleware = async ({ next }) => {
   return response;
 };
 
-const authMiddleware = async ({ request, metadata, next }) => {
+const authMiddleware: MiddlewareFunction = async ({ request, metadata, next }) => {
   try {
     // Get the token from the request headers
     const token = request.headers.get('authorization')?.split(' ')[1];
@@ -245,8 +263,9 @@ const authMiddleware = async ({ request, metadata, next }) => {
     const user = await validateToken(token);
 
     // Add context & continue chain
+    // next() accepts an optional object with a context property
     const response = await next({
-      context: { user },
+      context: { user }, // This context will be merged with existing context
     });
 
     // You can modify the response after the handler
@@ -263,7 +282,7 @@ const authMiddleware = async ({ request, metadata, next }) => {
   }
 };
 
-const permissionsMiddleware = async ({ metadata, next }) => {
+const permissionsMiddleware: MiddlewareFunction = async ({ metadata, next }) => {
   // Metadata are optional and type-safe
   const response = await next({
     context: { permissions: metadata?.permissions ?? ['read'] },
@@ -311,7 +330,7 @@ The middleware can:
 #### Pre/Post Handler Execution
 
 ```ts
-const timingMiddleware = async ({ next }) => {
+const timingMiddleware: MiddlewareFunction = async ({ next }) => {
   console.log('Starting request...');
   const start = performance.now();
 
@@ -327,7 +346,7 @@ const timingMiddleware = async ({ next }) => {
 #### Response Modification
 
 ```ts
-const headerMiddleware = async ({ next }) => {
+const headerMiddleware: MiddlewareFunction = async ({ next }) => {
   const response = await next();
 
   return new Response(response.body, {
@@ -343,14 +362,14 @@ const headerMiddleware = async ({ next }) => {
 #### Context Chaining
 
 ```ts
-const middleware1 = async ({ next }) => {
+const middleware1: MiddlewareFunction = async ({ next }) => {
   const response = await next({
     context: { value1: 'first' },
   });
   return response;
 };
 
-const middleware2 = async ({ context, next }) => {
+const middleware2: MiddlewareFunction = async ({ context, next }) => {
   // Access previous context
   console.log(context.value1); // 'first'
 
@@ -364,7 +383,7 @@ const middleware2 = async ({ context, next }) => {
 #### Early Returns
 
 ```ts
-const authMiddleware = async ({ next }) => {
+const authMiddleware: MiddlewareFunction = async ({ next }) => {
   const isAuthed = false;
 
   if (!isAuthed) {
@@ -400,7 +419,7 @@ const route = createZodRoute()
 #### After (v0.2.0)
 
 ```typescript
-const authMiddleware = async ({ next }) => {
+const authMiddleware: **MiddlewareFunction** = async ({ next }) => {
   // Execute code before handler
   console.log('Checking auth...');
 
